@@ -1,0 +1,232 @@
+---
+title: "World Bank Final Project"
+author: "I agree to abide by the Stern Code of Conduct - Ryan Yee (rby217)"
+date: "04/04/2019"
+output: html_document
+---
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(wbstats)
+library(ggfortify)
+```
+
+# Introduction
+
+In this project, I am hoping to determine if there is a relationship in countries between school enrolment rates and the following factors: access to electricity, rate of urbanisation, and the number of hospital beds per 1000 people. I will utilise data from the World Bank. In order to analyse, I'll create a linear model for each outcome measure with all the predictors, and a sub-model without the `Hospital beds (per 1,000 people)` predictor to compare whether or not the models have significant differences. With these models, I'll conduct ANOVA tests, interpret coefficients & confidence intervals, and compare their regression diagnostic plots to measure the models' fit and to analyse their potential differences and similarities.
+
+## Outcome Measures
+
+In order to measure school enrolment in a country, I'll utilise the `School enrollment, primary (% net)` data set and the `School enrollment, secondary (% net)` data set to measure the outcome. I have chosen these indicators as they are reflective of enrolment rates for children attending primary and secondary school.
+
+
+## Predictors
+
+For my predictor variables, I'll utilise the `Access to electricity (% of population)`, `Urban population (% of total)`, and `Hospital beds (per 1,000 people)`. These predictors are reflective of the aforementioned factors. I'll focus more on the `Urban population (% of total)` indicator for this study as I am interested in finding out if urbanisation rates, which are on the rise, have a relationship with school enrolment rates.  
+
+## Hypothesis 
+
+My hypothesis is that there is a correlation between school enrolment and the predictors I mentioned earlier. In addition, I believe that the relationship between the outcomes and predictors will be a positive one. In other words, as the measures in the predictors of `Access to electricity (% of population)`, `Urban population (% of total)`, and `Hospital beds (per 1,000 people)` increases, so will the outcome measures of `School enrollment, primary (% net)` and `School enrollment, secondary (% net)`. I believe that the `Urban population` predictor will have a higher fit across both models, which means that I expect the R-squared (adjusted) measures and the diagnostic plots of both sub-models to have a better fit and distribution than the full-models. 
+
+ 
+# Analysis
+
+## Data Description
+```{r cache=TRUE}
+wb_variables <- c("SE.PRM.NENR",
+                  "SE.SEC.NENR",
+                  "EG.ELC.ACCS.ZS",
+                  "SP.URB.TOTL.IN.ZS",
+                  "SH.MED.BEDS.ZS")
+
+wb_names <- c("prms",
+              "secs",
+              "electricaccess",
+              "urbanpoprate",
+              "hospitalbed1000")
+
+wb_data <- wb(country = "all", indicator = wb_variables,
+              startdate = 2007, enddate = 2018, return_wide = TRUE)
+
+```
+
+| School enrollment, primary (% net) | School enrollment, secondary (% net) | Access to electricity (% of population) | Urban population (% of total) | Hospital beds (per 1,000 people) |
+|:--|:--|:--|:--|:--|
+| `prms` | `secs` | `electricaccess` | `urbanpoprate` | `hospitalbed1000` |
+| The ratio of children of official school age who are enrolled in primary school to the population of the corresponding official school age.  | The ratio of children of official school age who are enrolled in secondary school to the population of the corresponding official school age. | The percentage of the population with access to electricity. | The percentage of people living in urban areas as defined by national statistical offices. |  Include inpatient beds available in public, private, general, and specialised hospitals and rehabilitation centres. |
+| Values between 0 - 100 | Values between 0 - 100| Values between 0 - 100 | Values between 0 - 100 | Continuous Variable |  
+
+## Assigning Values & Removing `NA`s
+
+```{r Assigning Values}
+wb_recent <- wb_data %>%
+  group_by(country) %>%
+  arrange(desc(date)) %>%
+  fill(wb_variables) %>% # fill NAs with value from most recent year
+  drop_na() %>%
+  top_n(n = 1, wt = date) %>%
+  ungroup() %>%
+  rename_at(vars(wb_variables), ~ wb_names)
+```
+
+## Data Check
+
+```{r Data Check}
+# Number of countries included
+nrow(wb_recent)
+```
+
+## First Outcome - Primary School Enrollment (% net)
+
+```{r}
+#First Outcome Full-Model
+modelA1 <- lm(prms ~ electricaccess + urbanpoprate + hospitalbed1000, wb_recent)
+
+#First Outcome Sub-Model
+modelA2 <- lm(prms ~ electricaccess + urbanpoprate, wb_recent)
+```
+
+#### Summary of First Outcome Models
+```{r}
+summary(modelA1)
+
+summary(modelA2)
+```
+
+|  | `urbanpoprate` p-value | R-squared | adjusted R-squared | Intercept-only p-value |
+|:--|:--|:--|:--|:--|
+| `modelA1` |  0.6826 | 0.3165 | 0.3044 | 5.339e-14 |
+| `modelA2` | 0.938 | 0.2951 | 0.2868 | 1.036e-13 |
+
+	
+For the `urbanpoprate` p-value, across both models, it can be seen that the values are above the significance level of 0.05 which means we do not reject the null hypothesis that these coefficients are 0. The R-squared measures are not too different, with `modelA2` (sub-model) having a slightly worse fit. However, the inclusion of predictors has statistical significance as the p-values are below the 0.05 significance level. Interestingly, it appears that `electricaccess` is statistically significant across both models, and the `hospitalbed1000` measure is significant in the full-model.
+
+#### F-Test on First Outcome Models
+ 
+```{r}
+anova(modelA1, modelA2)
+```
+
+The `anova()` results indicate a statistically significant difference between both models, and based on the R-squared adjusted values, the test prefers `modelA1`.
+
+#### Confidence Interval for First Outcome Models
+
+```{r}
+confint(modelA1)
+
+confint(modelA2)
+```
+
+| 95% C.I | Full-Model | Sub-Model |
+|:--|:--|:--|
+| (Intercept) | (70.16729070, 78.30390623) | (70.13771253, 78.37616055) |
+| `electricaccess` | (0.12135200, 0.24511999) | (0.13672671, 0.25938692) |
+| `urbanpoprate` | (-0.08861474, 0.05815679) | (-0.07641549, 0.07064771) |
+| `hospitalbed1000` | (0.09497269, 1.21882033) | N/A |
+
+For my main predictor, `urbanpoprate`, the results of the confidence interval test are reflective of the p-values found in the summary. Based on this test, 95% of the values are either 0 or near 0 and are statistically insignificant. In terms of practical significance, this test indicates that the urban population rate in a given country may not be indicative of primary school enrolment rates.
+
+
+#### Diagnostic Plots for First Outcome Models
+
+```{r}
+autoplot(modelA1)
+
+autoplot(modelA2)
+```
+
+
+For the full-model in the `Residuals vs Fitted`  and the `Scale-Location` plots, it appears that the vertical spread of the data is fairly consistent except in  the 90-95 range of `Fitted Values` where the there are many points bunched together. 
+
+In contrast, the same plots for sub-model appear to be homoscedastic except for the high number of points on the higher end of the `Fitted Values` axis. 
+
+Across both models, the `Normal Q-Q` plots appear to be fairly similar, with both featuring very heavy tails on the lower end of the `Theoretical Quantiles` and a few extreme values on the higher end. This indicates that the distribution of residuals is not normal.
+
+This is reflected in the `Residuals vs Leverage` plot as there is are a noticeable number of outliers, particularly with a negative residual. This suggests that the distribution of points across both models is not normal, especially with the high number of extreme values. A notable difference between both models, however, is the lack of points with very high leverages in the sub-model compared to the full-model. The sub-model's highest leverage point is less than 0.08, while the highest leverage point in the full-model is just shy of 0.25.
+
+## Summary for First Outcome Models
+
+There appear to be significant differences between both the models for the first outcome. As seen the in summary, the only predictors with statistical significance were the  `electricaccess` and `hosptialbed1000`, with the `anova()` test preferring the full-model over the sub-model. These results did not match the expectations I had in my hypothesis as not only was my main predictor, `urbanpoprate`, not statistically significant in these models, but the full-model was preferred over the sub-model too. Overall, however, the low R-squared adjusted values and the diagnostic plots indicate that this model may not be the best to estimate primary school enrolment rates. 
+
+## Second Outcome - Secondary School Enrollment (% net)
+
+```{r Creating Models}
+#Second Outcome Full-Model
+modelB1 <- lm(secs ~ electricaccess + urbanpoprate + hospitalbed1000, wb_recent)
+
+#Second Outcome Sub-Model
+modelB2 <- lm(secs ~ electricaccess + urbanpoprate, wb_recent)
+```
+
+#### Summary of Second Outcome Models
+
+```{r Summary of Models}
+summary(modelB1)
+
+summary(modelB2)
+```
+
+
+|  | `urbanpoprate` p-value | R-squared | adjusted R-squared | Intercept-only p-value |
+|:--|:--|:--|:--|:--|
+| `modelB1` |  0.017 | 0.8303 | 0.8273 | < 2.2e-16 |
+| `modelB2` | 0.002323 | 0.7447 | 0.7417 | < 2.2e-16 |
+
+For the `urbanpoprate` p-value, across both models, it can be seen that the values are below the significance level of 0.05 which means we reject the null hypothesis that these coefficients are 0. The R-squared measures differ across both models, with the sub-model having a worse fit. The inclusion of predictors has statistical significance as the p-values are below the 0.05 significance level. Interestingly, it appears that all the predictors are statistically significant across both models.
+
+#### F-Test on Second Outcome Models
+
+```{r ANOVA}
+anova(modelB1, modelB2)
+```
+
+The `anova()` results indicate a statistically significant difference between both models, and based on the R-squared adjusted values, the test prefers the full-model.
+
+#### Confidence Interval for Second Outcome Models
+
+```{r Confidence Intervals}
+confint(modelB1)
+
+confint(modelB2)
+```
+
+| 95% C.I. | Full-Model | Sub-Model |
+|:--|:--|:--|
+| (Intercept) | (5.61378623, 14.8687615) | (4.67920586, 15.9981907) |
+| `electricaccess` | (0.47993958, 0.6207192) | (0.53373483, 0.7022604)  |
+| `urbanpoprate` |(0.01840817, 0.1853531)| (0.05721857, 0.2592719) |
+| `hospitalbed1000` | (2.36006852, 3.6383865) | N/A |
+
+For my main predictor, the results of the confidence interval test are reflective of the estimated coefficient value from the summary and is statistically significant as seen with the p-value. In terms of practical significance, through both models' intervals, it can be seen that rates of urbanisation have a relationship with secondary school enrolment rates, but this relationship is weaker than that of electricity access and the number of hospital beds per 1000 people in a given country. 
+
+#### Diagnostic Plots for Second Outcome Models
+
+```{r Diagnostic Plots}
+autoplot(modelB1)
+
+autoplot(modelB2)
+```
+
+Across both models, the `Residuals vs Fitted`  and the `Scale-Location` plots, appear to have a similar vertical spread. The vertical spread also appears to be consistent throughout, although there are more points between 60-90 along the `Fitted Values` axis. A notable difference between both models, however, is the presence of an outlier in the sub-model. Upon further examination, this point corresponds to `PRK`, or North Korea.  
+
+Similarly, across both models, the `Normal Q-Q` plots appear to be fairly similar, with the only presence of extreme values showing as heavy tails on the lower end of the `Theoretical Quantiles`. Again, a notable difference between both models in the presence of an outlier in the sub-model, which is the same point that was mentioned in the previous paragraph, `PRK`.
+
+Interestingly, in the `Residuals vs Leverage` plot, the `PRK` point appears in both models. In the full-model, this point has high leverage just shy of 0.25, while in the plot for the sub-model, the point is more notable as having a relatively high residual. In the full-model, there is another point with relatively high leverage too, which is Japan. This appears to be due to the country having high values across all the measures. There only appears to be a handful of extreme values, however, across these models, which is reflective of the full-model's higher R-squared adjusted value.
+
+## Summary for Second Outcome Models
+
+Unlike the first outcome model, the predictors have a stronger relationship with the second outcome of secondary school enrolment. As seen in the summary, all predictors were statistically significant, and the R-squared adjusted values indicate that both models have a good fit in predicting the outcome measure for secondary school. This supports my hypothesis of not just correlation excising between the outcome and predictors, but also a positive relationship between these measures. The `anova()` results and the R-squared adjusted values, however, favoured the full-model over the sub-models which is contrary to my hypothesis regarding the main predictor. From these models and tests, it appears that these predictors are useful for secondary school enrolment specifically, but not necessarily for primary school enrolment. 
+
+# Conclusion
+
+From my tests, I've found that most of my initial hypothesis about the relationship between the outcomes and predictors is mostly incorrect. Although the relationship between the predictors and outcome measures was positive, the other parts of my hypothesis were disproven. I had chosen `urbanpoprate` as my main predictor because I had believed that urban settings would give people better access to social and economic resources and opportunities. As seen in the Analysis section, for the first outcome models, `urbanpoprate` was statistically insignificant. However, in the second outcome models, `urbanpoprate` had statistical significance.
+Interestingly, all of the sub-models ended up having a worse fit compared to the full-models. This indicates that the other predictors I've included were better in creating a model to predict school enrolment rates across countries. 
+
+A factor to consider is how the data is measured by the World Bank and participating countries. As mentioned in the description of the outcomes and predictors, the categorisation of data is determined by individual states. This means that in my analysis, I have been comparing states that have a differing range of education systems and different definitions of urbanisation. 
+
+In addition, there were some limitations in my data as 31 out of the 174 rows was data of non-state entities. Given that the World Bank works with 189 different states, the data is biased towards the 143 actual states that were included in after removing rows with insufficient data. States with differing degrees of autonomy/sovereignty and different cultural, economic, and political environments such as China may also need to be reconsidered as they have different systems of implementing policy and infrastructure within their territory.
+	
+Since electricity access rates and the number of hospital beds per 1000 have been statistically significant across all models, there could be other factors that influence the enrolment rates at schools. Given the differences between the predictors, clear causal conclusions cannot be made as there is potential for confounding variables to affect the rates of enrolment at schools.
+
+Most interestingly, it appears that rates of primary school enrolment are higher overall across states, with the lowest rate in my dataset being ~40% in Liberia and the lowest rate of secondary school enrolment of ~14% in the Central African Republic. This difference indicates that primary school attendance is higher overall than secondary school is. The averages across the included data rows are `90.59` for primary school enrolment and `71.1` for secondary school enrolment. This is reflected in the higher estimates of the Intercepts in primary school enrolment models over secondary school enrolment models. From these averages and the intercepts in the models, it can be seen that secondary school enrolment rates are significantly lower, and the models have a better fit measuring secondary school enrolment than primary school enrolment. These differences show that although overall school enrolment is high, there are different issues that are keeping children from continuing their education from secondary school onwards and these issues have a statistically significant correlation with the predictors used. 
