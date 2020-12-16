@@ -1,7 +1,7 @@
 # worldbank-project
 
 
-***<a href = "https://yeeryan.github.io/worldbank-project/">View the report</a>***
+➡️ ***<a href = "https://yeeryan.github.io/worldbank-project/">View the Report</a>*** ⬅️
 
 ## About the Project
 
